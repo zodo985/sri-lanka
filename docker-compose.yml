@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: sri_lanka_tourism_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: sri_lanka_tourism_chatbot
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - tourism_network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: sri_lanka_tourism_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - tourism_network
+
+  # FastAPI Backend
+  backend:
+    build: .
+    container_name: sri_lanka_tourism_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://admin:password123@mongodb:27017/sri_lanka_tourism_chatbot?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - DEBUG=True
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./app:/app
+      - ./logs:/app/logs
+    networks:
+      - tourism_network
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Rasa Chatbot (Optional - for advanced NLP)
+  rasa:
+    image: rasa/rasa:3.6.15-full
+    container_name: sri_lanka_tourism_rasa
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./rasa:/app
+    environment:
+      - RASA_SERVER_URL=http://rasa:5005
+    networks:
+      - tourism_network
+    profiles:
+      - rasa
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  tourism_network:
+    driver: bridge
